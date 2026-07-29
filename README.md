@@ -97,6 +97,7 @@ python launch.pyw
 | File/Dir     | Purpose                          |
 | ------------ | -------------------------------- |
 | `Directree/` | Application package (14 modules) |
+| `monolith/`  | Single-file edition of the app   |
 | `launch.pyw` | Entry-point launcher             |
 | `Manual.md`  | Full user manual                 |
 | `README.md`  | This file                        |
