@@ -542,6 +542,29 @@ TREE_BRANCH_RE = re.compile(
     r"(?P<branch>(?:├|└|╞|╘|╠|╚)[─═-]{2,}|(?:\+|\\|`|\|)-{2,3})"
 )
 
+# Reference annotations that can trail an item name in pasted trees. Everything
+# from the first marker to end-of-line is display-only metadata, not part of the
+# file/folder name (e.g. "SKILL.md  ← always loaded: core rules + routing").
+ANNOTATION_MARKERS = ("←", "→", "<-", "->", "#")
+
+
+def strip_tree_annotations(name: str) -> str:
+    positions = [name.find(marker) for marker in ANNOTATION_MARKERS]
+    positions = [pos for pos in positions if pos != -1]
+    if positions:
+        name = name[: min(positions)]
+    return name.strip()
+
+
+def clean_tree_text(text: str) -> str:
+    cleaned_lines = []
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        indent = line[: len(line) - len(line.lstrip(" "))]
+        content = strip_tree_annotations(line[len(indent):])
+        cleaned_lines.append(indent + content)
+    return "\n".join(cleaned_lines)
+
 
 # ---------------------------------------------------------------------------
 # DATA MODELS
@@ -926,13 +949,7 @@ def parse_tree_line(raw_line: str, line_no: int) -> ParsedLine | None:
     if branch_match:
         prefix = line[:branch_match.start()].expandtabs(4)
         depth = len(prefix) // 4
-        name = line[branch_match.end():].strip()
-
-        if not name:
-            return None
-
-        if "#" in name:
-            name = name.split("#", 1)[0].rstrip()
+        name = strip_tree_annotations(line[branch_match.end():])
 
         if not name:
             return None
@@ -951,13 +968,7 @@ def parse_tree_line(raw_line: str, line_no: int) -> ParsedLine | None:
     expanded = line.expandtabs(4)
     leading_spaces = len(expanded) - len(expanded.lstrip(" "))
     depth = leading_spaces // 4
-    name = expanded.strip()
-
-    if not name:
-        return None
-
-    if "#" in name:
-        name = name.split("#", 1)[0].rstrip()
+    name = strip_tree_annotations(expanded.strip())
 
     if not name:
         return None
@@ -1348,9 +1359,17 @@ class EditTab(QWidget):
         copy_btn = QPushButton("\u2398 Copy")
         copy_btn.clicked.connect(self._on_copy)
 
+        cleanup_btn = QPushButton("\U0001f9f9 Cleanup Tree")
+        cleanup_btn.setToolTip(
+            "Remove reference annotations (e.g. '  \u2190 notes', '# comment') "
+            "from the pasted tree so created files/folders get clean names"
+        )
+        cleanup_btn.clicked.connect(self._on_cleanup)
+
         tb.addWidget(import_btn)
         tb.addWidget(clear_btn)
         tb.addWidget(copy_btn)
+        tb.addWidget(cleanup_btn)
         tb.addStretch()
 
         self.mode_label = QLabel("")
@@ -1441,6 +1460,9 @@ class EditTab(QWidget):
 
     def _on_copy(self):
         self.window().copy_to_clipboard()
+
+    def _on_cleanup(self):
+        self.window().cleanup_tree()
 
     def _on_import(self):
         self.window()._open_scan_tab()
@@ -2066,6 +2088,16 @@ class DirecTreeApp(QMainWindow):
             return
         QApplication.clipboard().setText(text)
         self.status_bar.showMessage("Copied to clipboard")
+
+    def cleanup_tree(self):
+        text = self.edit_tab.edit.toPlainText()
+        cleaned = clean_tree_text(text)
+        if cleaned == text:
+            self.status_bar.showMessage("Tree is already clean")
+            return
+        self.edit_tab.edit.setPlainText(cleaned)
+        self.log("--- Action: Cleanup Tree ---")
+        self.status_bar.showMessage("Tree cleaned")
 
     # ----- extensionless policy -----
 
