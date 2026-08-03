@@ -5,6 +5,16 @@ from Directree.models import ParsedLine
 from Directree.utils import strip_ansi
 from Directree.constants import TREE_SKIP_RE, TREE_BRANCH_RE, COMMON_HIDDEN_DIRS, COMMON_EXTENSIONLESS_FILES
 
+ANNOTATION_MARKERS = ("\u2190", "\u2192", "<-", "->", "#")
+
+
+def strip_tree_annotations(name: str) -> str:
+    positions = [name.find(marker) for marker in ANNOTATION_MARKERS]
+    positions = [pos for pos in positions if pos != -1]
+    if positions:
+        name = name[: min(positions)]
+    return name.strip()
+
 
 def parse_tree_line(raw_line: str, line_no: int) -> ParsedLine | None:
     line = strip_ansi(raw_line).rstrip()
@@ -25,13 +35,7 @@ def parse_tree_line(raw_line: str, line_no: int) -> ParsedLine | None:
     if branch_match:
         prefix = line[:branch_match.start()].expandtabs(4)
         depth = len(prefix) // 4
-        name = line[branch_match.end():].strip()
-
-        if not name:
-            return None
-
-        if "#" in name:
-            name = name.split("#", 1)[0].rstrip()
+        name = strip_tree_annotations(line[branch_match.end():])
 
         if not name:
             return None
@@ -50,13 +54,7 @@ def parse_tree_line(raw_line: str, line_no: int) -> ParsedLine | None:
     expanded = line.expandtabs(4)
     leading_spaces = len(expanded) - len(expanded.lstrip(" "))
     depth = leading_spaces // 4
-    name = expanded.strip()
-
-    if not name:
-        return None
-
-    if "#" in name:
-        name = name.split("#", 1)[0].rstrip()
+    name = strip_tree_annotations(expanded.strip())
 
     if not name:
         return None
